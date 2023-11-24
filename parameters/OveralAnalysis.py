@@ -16,7 +16,7 @@ turbofan_kwargs = {
     'nc': None, # Compressor - Isentropic
     'nt': None, # Turbine - Isentropic
     'nt_lp': None, # LP Turbine - Isentropic
-    'nb': 0.99, # Combustor
+    'nb': 1.0, # Combustor
     'nm': 0.99, # Mechanical
     'npf': 0.92, # Fan - Polytropic
     'npc': 0.90, # Compressor - Polytropic
