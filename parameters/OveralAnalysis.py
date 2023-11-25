@@ -21,6 +21,7 @@ turbofan_kwargs = {
     'npf': 0.92, # Fan - Polytropic
     'npc': 0.90, # Compressor - Polytropic
     'npt': 0.92, # Turbine - Polytropic
+    'npt_lp': 1, # LP Turbine - Polytropic
     'dP_combustor': 0, # Decimal pressure drop in combustor
     'rfan': 1.4, # Req - Fan PR
     'rc': 15,   # Req - Compressor PR

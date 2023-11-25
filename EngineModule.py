@@ -430,6 +430,7 @@ class compressor_stage():
     def calculate(self):
         # Currently assuming Constant Axial Velocity
         wdf = interp_wdf(self.stage_num) if self.WDF == None else self.WDF
+        self.WDF = wdf
         To1 = self.Toi
         Po1 = self.Poi
         if self.Lamda == None:
@@ -443,11 +444,12 @@ class compressor_stage():
             self.beta_2 = np.arctan((self.U_m - self.Cw2) / self.Ca)
             self.alpha_1 = np.arctan(self.Cw1/self.Ca) # Should be 0 for first stage
             self.alpha_2 = np.arctan(self.Cw2/self.Ca)
-            
+            # Calculate Lamda
+            self.Lamda = 1 - (self.Cw1 + self.Cw2)/(2*self.U_m)
         else: 
             # We already know lamda
             # Equations to help solve for betas
-            eq1= (self.cpa*self.dTo) / (wdf*self.U_m*self.Ca) # = tan(B1) - tan(B2)
+            eq1= (self.cp*self.dTo) / (wdf*self.U_m*self.Ca) # = tan(B1) - tan(B2)
             eq2= 2*self.Lamda*self.U_m/self.Ca # = tan(B1) + tan(B2)
             
             # Solve for gas angles
@@ -469,8 +471,8 @@ class compressor_stage():
         self.V1 = np.sqrt(self.U_m**2 - self.C1**2)
         self.V2 = np.sqrt(self.U_m**2 - self.C2**2)
         # Solve for static params
-        self.T1 = self.To1 - (self.C1**2)/(2*self.cp)
-        self.P1 = self.Po1*(self.T1/To1)**(self.gam/(self.gam-1))
+        self.T1 = To1 - (self.C1**2)/(2*self.cp)
+        self.P1 = Po1*(self.T1/To1)**(self.gam/(self.gam-1))
         self.rho1 = self.P1/(self.R*self.T1)
         # Solve for blade dimensions
         self.h = self.mdot/(2*np.pi * self.rho1 * self.Ca * self.r_m)
@@ -505,6 +507,9 @@ class compressor_stage():
         self.Poe = Po1*(1 + self.nc*self.dTo/To1)**(self.gam/(self.gam - 1))
         self.Toe = To1 + self.dTo
         
+        return self.MachExceeded_Flag, self.deHaller_Failed_Flag
+    
+    
     def forward(self, next_stage):
         next_stage.Toi = self.Toe
         next_stage.Poi = self.Poe
@@ -514,23 +519,24 @@ class compressor_stage():
         num2s = num1s + 1 
         num3s = num2s + 1
         print('----------------------')
-        print('Stage ',self.stage_num)
+        print('Stage ',self.stage_num, 'λ = {:4.3f}'.format(self.WDF))
         print('Mean Line Properties')
         print('Gas Angles')
-        print('\t alpha_{:.0f} {:6.2f}°'.format(num1s, np.degrees(self.alpha_1)))
-        print('\t beta_{:.0f}  {:6.2f}°'.format(num1s, np.degrees(self.beta_1)))
-        print('\t alpha_{:.0f} {:6.2f}°'.format(num2s, np.degrees(self.alpha_2)))
-        print('\t beta_{:.0f}  {:6.2f}°'.format(num2s, np.degrees(self.beta_2)))
-        print('Absolute Vels:\n')
-        print('\t C_{:.0f}  {:6.3f} m/s'.format(num1s, np.degrees(self.C1)))
-        print('\t Cw_{:.0f} {:6.3f} m/s'.format(num1s, np.degrees(self.Cw1)))
-        print('\t C_{:.0f}  {:6.3f} m/s'.format(num2s, np.degrees(self.Cw)))
-        print('\t Cw_{:.0f} {:6.3f} m/s'.format(num2s, np.degrees(self.Cw2)))
-        print('Relative Vels:\n')
-        print('\t V_{:.0f}  {:6.3f} m/s'.format(num1s, np.degrees(self.V1)))
-        print('\t Vw_{:.0f} {:6.3f} m/s'.format(num1s, np.degrees(self.Vw1)))
-        print('\t V_{:.0f}  {:6.3f} m/s'.format(num2s, np.degrees(self.Vw)))
-        print('\t Vw_{:.0f} {:6.3f} m/s'.format(num2s, np.degrees(self.Vw2)))
+        print('\t α_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.alpha_1)))
+        print('\t Β_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.beta_1)))
+        print('\t α_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.alpha_2)))
+        print('\t Β_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.beta_2)))
+        print('\t Λ_{:.0f} {:6.3%}'.format(self.stage_num, self.Lamda))
+        print('Absolute Vels:')
+        print('\t C_{:.0f}  {:6.3f} m/s'.format(num1s, self.C1))
+        print('\t Cw_{:.0f} {:6.3f} m/s'.format(num1s, self.Cw1))
+        print('\t C_{:.0f}  {:6.3f} m/s'.format(num2s, self.C2))
+        print('\t Cw_{:.0f} {:6.3f} m/s'.format(num2s, self.Cw2))
+        print('Relative Vels:')
+        print('\t V_{:.0f}  {:6.3f} m/s'.format(num1s, self.V1))
+        print('\t Vw_{:.0f} {:6.3f} m/s'.format(num1s, self.Vw1))
+        print('\t V_{:.0f}  {:6.3f} m/s'.format(num2s, self.V2))
+        print('\t Vw_{:.0f} {:6.3f} m/s'.format(num2s, self.Vw2))
         print('----------------------')
         
 class rotor_turbine():
@@ -1029,7 +1035,7 @@ class Turbofan_DoubleSpool():
         None.
 
         '''
-        print('Inputs')
+        print('Turbofan Engine Inputs')
         for key,val in self.inputs.items():
             print('\t {}  =  {}'.format(key,val))
             
