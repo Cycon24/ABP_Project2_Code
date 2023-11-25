@@ -8,6 +8,7 @@ import sys
 import numpy as np
 import EngineErrors as EngineErrors
 import EnginePerformanceFunctions as EPF
+from WorkDoneFactor import interp_wdf
 
 # Use to define the general states/functions shared by each/most stages
 class Stage():
@@ -350,35 +351,64 @@ class Nozzle(Stage):
         self.Poe = self.Pe * (1 + (self.gam -1)*(self.Me**2)/2)**(self.gam/(self.gam -1))
        
             
-class compressor_rotor():
-    def __init__(self, r_tip, r_root, omega, Ca, AssumeConstAxialVel=True, **inputs):
-        self.r = inputs.get('r')
-        self.w = inputs.get('omega')
+class compressor_stage():
+    # Rotor and Stator, use 1 to denote inflow to rotor, 2 for between rotor
+    # and stator, 3 for exit of stator (and therefore stage)
+    def __init__(self, stage_number, Lamda, dTo_s, **inputs):
+        self.r_m = inputs.get('r_m')
+        # self.w = inputs.get('omega')
+        self.stage_num = stage_number
+        self.dTo = dTo_s
         self.Ca = inputs.get('Ca')
+        self.nc = inputs.get('nc_s')
+        self.U_m = inputs.get('U_m')
+        self.mdot = inputs.get('mdot_c')
+        self.N = inputs.get('N') # Rev/s
         
+        # Limit Props
+        self.de_Haller_min = 0.65
+        self.tip_Mach_max = 1.2
+        self.deHaller_Failed_Flag = False
+        self.MachExceeded_Flag = False
         
+        # Gas Props
+        self.cp = 1005 # J/kg*K
+        self.R = 287   # J/kg*K
+        self.gam = 1.4
         
-        self.deg_reac = inputs.get('lambda')
+        # Inlet conditions
+        self.Toi = inputs.get('Toi')
+        self.Poi = inputs.get('Poi')
+        self.Toe = None
+        self.Poe = None
         
-        self.Ca1 = inputs.get('Ca1')
-        self.Ca2 = inputs.get('Ca2')
+        self.Lamda = Lamda
+        self.WDF = inputs.get('WorkDoneFactor')
+        
+        # self.Ca1 = inputs.get('Ca1')
+        # self.Ca2 = inputs.get('Ca2')
+        # self.Ca3 = inputs.get('Ca3')
         
         self.C1 = inputs.get('C1')
         self.C2 = inputs.get('C1')
+        self.C3 = inputs.get('C3')
         self.Cw1 = inputs.get('Cw1')
         self.Cw2 = inputs.get('Cw2')
+        self.Cw3 = inputs.get('Cw3')
         
         self.V1 = inputs.get('V1')
-        self.V2 = inputs.get('V1')
+        self.V2 = inputs.get('V2')
+        # self.V3 = inputs.get('V3')
         self.Vw1 = inputs.get('Vw1')
         self.Vw2 = inputs.get('Vw2')
+        # self.Vw3 = inputs.get('Vw3')
         
         self.alpha_1 =inputs.get('alpha_1')
         self.alpha_2 =inputs.get('alpha_2')
+        self.alpha_3 =inputs.get('alpha_3')
         self.beta_1 =inputs.get('beta_1')
         self.beta_2 =inputs.get('beta_2')
-        
-        self.deg_reac = inputs.get('lambda')
+        # self.beta_3 =inputs.get('beta_3')
         
         
     # Velocity Triangle
@@ -397,8 +427,112 @@ class compressor_rotor():
     #          ||       ----> U
     #          ||
     #           \
-    
-   
+    def calculate(self):
+        # Currently assuming Constant Axial Velocity
+        wdf = interp_wdf(self.stage_num) if self.WDF == None else self.WDF
+        To1 = self.Toi
+        Po1 = self.Poi
+        if self.Lamda == None:
+            # First stage, need to find lamda, assuming Cw1 = 0 (no inlet swirl)
+            self.Cw1 = 0 if self.Cw1 == None else self.Cw1
+            # Solve for whirl difference and whirl vel
+            dCw = self.cp*self.dTo / (wdf*self.U_m) # Cw2 - Cw1 = dCw
+            self.Cw2 = dCw + self.Cw1
+            # Solve for Gas angles
+            self.beta_1 = np.arctan((self.U_m - self.Cw1) / self.Ca)
+            self.beta_2 = np.arctan((self.U_m - self.Cw2) / self.Ca)
+            self.alpha_1 = np.arctan(self.Cw1/self.Ca) # Should be 0 for first stage
+            self.alpha_2 = np.arctan(self.Cw2/self.Ca)
+            
+        else: 
+            # We already know lamda
+            # Equations to help solve for betas
+            eq1= (self.cpa*self.dTo) / (wdf*self.U_m*self.Ca) # = tan(B1) - tan(B2)
+            eq2= 2*self.Lamda*self.U_m/self.Ca # = tan(B1) + tan(B2)
+            
+            # Solve for gas angles
+            self.beta_1 = np.arctan((eq1+eq2)/2)
+            self.beta_2 = np.arctan(eq2 - np.tan(self.beta_1))
+            self.alpha_1 = np.arctan(self.U_m/self.Ca  - np.tan(self.beta_1))
+            self.alpha_2 = np.arctan(self.U_m/self.Ca  - np.tan(self.beta_2))
+            # Solve for whirl velocities
+            self.Cw1 = self.Ca*np.tan(self.alpha_1)
+            self.Cw2 = self.Ca*np.tan(self.alpha_2)
+            
+        # The rest should be the same wether first, last, or intermediate stage    
+        # Solve for absolute gas velocities
+        self.C1 = np.sqrt(self.Cw1**2 + self.Ca**2)
+        self.C2 = np.sqrt(self.Cw2**2 + self.Ca**2)
+        # Solve for other gas-triangle properties
+        self.Vw1 = self.U_m - self.Cw1 
+        self.Vw2 = self.U_m - self.Cw2 
+        self.V1 = np.sqrt(self.U_m**2 - self.C1**2)
+        self.V2 = np.sqrt(self.U_m**2 - self.C2**2)
+        # Solve for static params
+        self.T1 = self.To1 - (self.C1**2)/(2*self.cp)
+        self.P1 = self.Po1*(self.T1/To1)**(self.gam/(self.gam-1))
+        self.rho1 = self.P1/(self.R*self.T1)
+        # Solve for blade dimensions
+        self.h = self.mdot/(2*np.pi * self.rho1 * self.Ca * self.r_m)
+        self.r_t = self.r_m + self.h/2
+        self.r_r = self.r_m - self.h/2 
+
+        # Checking tip mach
+        self.Cw1_t = self.Cw1 * self.r_m / self.r_t
+        self.C1_t = np.sqrt(self.Cw1_t**2 + self.Ca**2)
+        T1_t = To1 - (self.C1_t**2)/(2*self.cp)
+        self.V1_t = np.sqrt((2*np.pi*self.N*self.r_t - self.Cw1_t)**2 + self.Ca**2)
+        self.M1_t = self.V1_t / np.sqrt(self.gam*self.R*T1_t)
+        
+        if self.M1_t > self.tip_Mach_max:
+            print('Max tip Mach exceeded in stage {}, M_t = {:.4f}'.format(self.stage_num, self.M1_t))
+            self.MachExceeded_Flag = True
+        
+        R1_tm = self.r_t/self.r_m 
+        R1_rm = self.r_r/self.r_m
+        
+        # Get Degree of Reactions at root and tip
+        self.Lamda_t = 1 - (1 - self.Lamda)/R1_tm**2
+        self.Lamda_r = 1 - (1 - self.Lamda)/R1_rm**2
+        
+        # Check de Haller Criteria
+        deHaller = np.cos(self.beta_1)/np.cos(self.beta_2)
+        if deHaller < self.de_Haller_min:
+            print('de Haller check failed in stage {}, V2/V1 = {:.4f}'.format(self.stage_num, deHaller))
+            self.deHaller_Failed_Flag = True
+        
+        # Calcualte exit stag properties
+        self.Poe = Po1*(1 + self.nc*self.dTo/To1)**(self.gam/(self.gam - 1))
+        self.Toe = To1 + self.dTo
+        
+    def forward(self, next_stage):
+        next_stage.Toi = self.Toe
+        next_stage.Poi = self.Poe
+        
+    def printVelocityTrianges(self):
+        num1s = 1 + (self.stage_num - 1)*3
+        num2s = num1s + 1 
+        num3s = num2s + 1
+        print('----------------------')
+        print('Stage ',self.stage_num)
+        print('Mean Line Properties')
+        print('Gas Angles')
+        print('\t alpha_{:.0f} {:6.2f}°'.format(num1s, np.degrees(self.alpha_1)))
+        print('\t beta_{:.0f}  {:6.2f}°'.format(num1s, np.degrees(self.beta_1)))
+        print('\t alpha_{:.0f} {:6.2f}°'.format(num2s, np.degrees(self.alpha_2)))
+        print('\t beta_{:.0f}  {:6.2f}°'.format(num2s, np.degrees(self.beta_2)))
+        print('Absolute Vels:\n')
+        print('\t C_{:.0f}  {:6.3f} m/s'.format(num1s, np.degrees(self.C1)))
+        print('\t Cw_{:.0f} {:6.3f} m/s'.format(num1s, np.degrees(self.Cw1)))
+        print('\t C_{:.0f}  {:6.3f} m/s'.format(num2s, np.degrees(self.Cw)))
+        print('\t Cw_{:.0f} {:6.3f} m/s'.format(num2s, np.degrees(self.Cw2)))
+        print('Relative Vels:\n')
+        print('\t V_{:.0f}  {:6.3f} m/s'.format(num1s, np.degrees(self.V1)))
+        print('\t Vw_{:.0f} {:6.3f} m/s'.format(num1s, np.degrees(self.Vw1)))
+        print('\t V_{:.0f}  {:6.3f} m/s'.format(num2s, np.degrees(self.Vw)))
+        print('\t Vw_{:.0f} {:6.3f} m/s'.format(num2s, np.degrees(self.Vw2)))
+        print('----------------------')
+        
 class rotor_turbine():
     def __init__(self):
         print('In development')
