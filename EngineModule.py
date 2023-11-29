@@ -677,11 +677,11 @@ class turbine_free_vortex():
         self.N = N
         
         self.gam = CycleTurbineObject.gam_g
-        self.cp = CycleTurbineObject.cp * 1000 # convert to J/kg*K
+        self.cp = CycleTurbineObject.cp_g * 1000 # convert to J/kg*K
         self.R = CycleTurbineObject.R 
         
         # Assumes even work distribustion between stages
-        self.dTo_stage = self.dTo_turb/numStages # K
+        self.dTo_stage = self.dTo_cycle/numStages # K
         
         self.stages = []
         for i in range(0, numStages):
@@ -689,12 +689,14 @@ class turbine_free_vortex():
                 self.stages.append(turbine_stage(self.Poi, self.Toi, self, i+1))
             else:
                 self.stages.append(turbine_stage(self.stages[i-1].Po3, self.stages[i-1].To3, self, i+1))
-                
+    def calculate(self):
+        for stage in self.stages:
+            stage.calculate()
                 
 class turbine_stage():
     def __init__(self, Poi, Toi, TurbineUnit_FV, stageNum):
         self.stageNum = stageNum
-        self.gam = TurbineUnit_FV.gam_g
+        self.gam = TurbineUnit_FV.gam
         self.cp = TurbineUnit_FV.cp # J/kg*K
         self.R = TurbineUnit_FV.R 
         nt_p = TurbineUnit_FV.nt_p
@@ -758,10 +760,18 @@ class turbine_stage():
         T_2t         = self.To1 - C_2t**2 / (2*self.cp) # K
         M_2t         = V_2t / np.sqrt(self.gam * self.R * T_2t)
         
-        if M_2t > self.Mach_max:
-            raise ValueError('Max Mach exceeded at {} : M_1 = {:.4f}'.format(name, M_2t))
-        if psi_r < self.PSI_MIN:
-            raise ValueError('Min Psi exceeded at {} : psi_r = {:.4f}'.format(name, psi_r))
+        # ADD THIS SOMEWHERE ELSE LATER
+        self.Mach_max = 1.2
+        # if M_2t > self.Mach_max:
+        #     raise ValueError('Max Mach exceeded at {} : M_1 = {:.4f}'.format(name, M_2t))
+        # if psi_r > self.PSI_MAX:
+        #     raise ValueError('Min Psi exceeded at {} : psi_r = {:.4f}'.format(name, psi_r))
+        # if phi_r < self.PHI_MIN:
+        #     raise ValueError('Max Phi exceeded at {} : phi_r = {:.4f}'.format(name, phi_r))
+        # if psi_t > self.PSI_MAX:
+        #     raise ValueError('Min Psi exceeded at {} : psi_t = {:.4f}'.format(name, psi_t))
+        # if phi_t < self.PHI_MIN:
+        #     raise ValueError('Max Phi exceeded at {} : phi_t = {:.4f}'.format(name, phi_t))
         return M_2t # For testing
         
         
