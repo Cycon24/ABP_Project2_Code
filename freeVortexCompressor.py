@@ -4,7 +4,7 @@ import pandas as pd
 from collections import OrderedDict
 
 class compressorStageData:
-    parameters = [val.strip() for val in "beta_1, beta_2, alpha_1, alpha_2, Ca, C_w1, C_w2, C_1, C_2, V_w1, V_w2, V_1, V_2, U, T_1, T_2, M_1, M_2, Lambda, deHaller, r".split(",")]
+    parameters = [val.strip() for val in "beta_1, beta_2, alpha_1, alpha_2, C_w1, C_w2, C_1, C_2, V_w1, V_w2, V_1, V_2, U, M_1, M_2, Lambda, deHaller, r".split(",")]
     max_len = max([len(name) for name in parameters])
     
     def __init__(self, input_data, name) -> None:
@@ -26,7 +26,7 @@ class compressorStageData:
             else:
                 names[param] = f"$\{param}$" if param in specials else f"${param}$"
 
-        names["Ca"] = "C_a"
+        # names["Ca"] = "$C_a$"
         return names
 
     def toDataFrame(self):
@@ -48,10 +48,10 @@ class freeVortexCompressorMeanLine:
     Mach_max = P.Mach_max
     de_Haller_min = P.de_Haller_min
 
-    beta_1m, beta_2m, alpha_1m, alpha_2m, Ca, Lambda_m, r_m, T_o1, N, delta_T_o = None, None, None, None, None, None, None, None, None, None
+    beta_1m, beta_2m, alpha_1m, alpha_2m, Ca, Lambda_m, r_m, T_o1, N, delta_T_o, wdf = None, None, None, None, None, None, None, None, None, None, None
     
-    def __init__(self, beta_1m, beta_2m, alpha_1m, alpha_2m, Ca, Lambda_m, r_m, T_o1, N, delta_T_o) -> None:
-        for val in "beta_1m, beta_2m, alpha_1m, alpha_2m, Ca, Lambda_m, r_m, T_o1, N, delta_T_o".split(","):
+    def __init__(self, beta_1m, beta_2m, alpha_1m, alpha_2m, Ca, Lambda_m, r_m, T_o1, N, delta_T_o, wdf) -> None:
+        for val in "beta_1m, beta_2m, alpha_1m, alpha_2m, Ca, Lambda_m, r_m, T_o1, N, delta_T_o, wdf".split(","):
             val = val.strip()
             exec(f"self.{val} = {val}")
         
@@ -63,7 +63,50 @@ class freeVortexCompressorMeanLine:
         U = 2*np.pi*r*self.N
 
         C_w1 = self.C_w1m * self.r_m / r
-        C_w2 = self.C_w2m * self.r_m / r
+        # C_w2 = self.C_w2m * self.r_m / r
+
+        # alpha_1 = np.rad2deg(np.arctan2(C_w1, self.Ca))
+        # alpha_2 = np.rad2deg(np.arctan2(C_w2, self.Ca))
+        
+        # beta_1  = np.rad2deg(np.arctan2(V_w1, self.Ca))
+        # beta_2  = np.rad2deg(np.arctan2(V_w2, self.Ca))
+        
+        Lambda = 1 - (1 - self.Lambda_m)/R**2
+        # We already know lamda
+        # Equations to help solve for betas
+        eq1= (self.cp*self.delta_T_o) / (self.wdf*U*self.Ca) # = tan(B1) - tan(B2)
+        eq2= 2*Lambda*U/self.Ca # = tan(B1) + tan(B2)
+        
+        # Solve for gas angles
+        beta_1 = np.arctan((eq1+eq2)/2)
+        beta_2 = np.arctan(eq2 - np.tan(beta_1))
+        alpha_1 = np.arctan(U/self.Ca  - np.tan(beta_1))
+        alpha_2 = np.arctan(U/self.Ca  - np.tan(beta_2))
+
+        dCw = self.cp*self.delta_T_o / (self.wdf*U) # Cw2 - Cw1 = dCw
+        C_w2 = dCw + C_w1
+        # Solve for Gas angles
+        # beta_1_test = np.arctan((U - C_w1) / self.Ca)
+        # beta_2_test = np.arctan((U - C_w2) / self.Ca)
+        # alpha_1_test = np.arctan(C_w1/self.Ca) # Should be 0 for first stage
+        # alpha_2_test = np.arctan(C_w2/self.Ca)
+
+        # if alpha_1 != alpha_1_test:
+        #     raise ValueError("alpha_1s not equal")
+
+        # if alpha_2 != alpha_2_test:
+        #     raise ValueError("alpha_2s not equal")
+
+        # if beta_1 != beta_1_test:
+        #     raise ValueError("beta_1s not equal")
+
+        # if beta_2 != beta_2_test:
+        #     raise ValueError(f"beta_2s not equal: {beta_2}, {beta_2_test}")
+
+
+        # Solve for whirl velocities
+        C_w1 = self.Ca*np.tan(alpha_1)
+        C_w2 = self.Ca*np.tan(alpha_2)
 
         V_w1    = (U - C_w1)
         V_w2    = (U - C_w2)
@@ -79,14 +122,6 @@ class freeVortexCompressorMeanLine:
         
         M_1  = V_1 / np.sqrt(self.gamma*self.R*T_1)
         M_2  = V_2 / np.sqrt(self.gamma*self.R*T_2)
-
-        alpha_1 = np.rad2deg(np.arctan2(C_w1, self.Ca))
-        alpha_2 = np.rad2deg(np.arctan2(C_w2, self.Ca))
-        
-        beta_1  = np.rad2deg(np.arctan2(V_w1, self.Ca))
-        beta_2  = np.rad2deg(np.arctan2(V_w2, self.Ca))
-        
-        Lambda = 1 - (1 - self.Lambda_m)/R**2
         
         if M_1 > self.Mach_max:
             if name is None:
@@ -100,11 +135,12 @@ class freeVortexCompressorMeanLine:
             else:
                 raise ValueError('Max Mach exceeded at {} : M_2 = {:.4f}'.format(name, M_2))
 
-        if Lambda < 0:
+        Lambda_test = self.Ca/(2*U)*(np.tan(beta_1) + np.tan(beta_2))
+        if Lambda_test < 0:
             if name is None:
-                raise ValueError('degree of reaction check failed: Lambda = {:.4f}'.format(Lambda))
+                raise ValueError('degree of reaction check failed: Lambda = {:.4f}'.format(Lambda_test))
             else:
-                raise ValueError('degree of reaction check failed at {}: Lambda = {:.4f}'.format(name, Lambda))
+                raise ValueError('degree of reaction check failed at {}: Lambda = {:.4f}'.format(name, Lambda_test))
         
         # Check de Haller Criteria
         deHaller = V_2/V_1
@@ -114,4 +150,10 @@ class freeVortexCompressorMeanLine:
             else:
                 raise ValueError('de Haller check failed at {}: V2/V1 = {:.4f}'.format(name, deHaller))
         Ca = self.Ca
+
+        beta_1 = np.rad2deg(beta_1)
+        beta_2 = np.rad2deg(beta_2)
+        alpha_1 = np.rad2deg(alpha_1)
+        alpha_2 = np.rad2deg(alpha_2)
+
         return compressorStageData(locals(), name)

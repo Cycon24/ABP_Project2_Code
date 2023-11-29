@@ -14,7 +14,7 @@ warnings.filterwarnings("error")
 # Adjustable parameters
 nc_p = 0.92 # >= 0.90 - Polytropic efficiency of overall compressor
 Mt_1 = 1.19 # <= 1.20 - tip mach number rel to blade for first stage
-Ca1  = 230  # m/s - Assuming Constant
+Ca1  = 230 # m/s - Assuming Constant
 Cw1  = 0    # m/s
 N    = 200  # rev/s
 dTos_ie = 45 # K - stag temp rise for first and last stages
@@ -161,7 +161,7 @@ with open("out.tex", 'w') as f:
     out =pandas.concat(stage_datas)
     names = for_formatting.getFormattedColumns()
     out = out.rename(columns=names)
-    f.write(out.to_latex())
+    f.write(out.to_latex(float_format='%.3f'))
 
 print('Finished calculations')     
 

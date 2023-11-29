@@ -482,7 +482,7 @@ class compressor_stage():
         self.r_t = self.r_m + self.h/2
         self.r_r = self.r_m - self.h/2
 
-        obj = freeVortexCompressorMeanLine(self.beta_1, self.beta_2, self.alpha_1, self.alpha_2, self.Ca, self.Lamda, self.r_m, To1, self.N, self.dTo)
+        obj = freeVortexCompressorMeanLine(self.beta_1, self.beta_2, self.alpha_1, self.alpha_2, self.Ca, self.Lamda, self.r_m, To1, self.N, self.dTo, self.WDF)
 
         try:
             print("Stage", self.stage_num)
@@ -492,6 +492,7 @@ class compressor_stage():
             self.tip  = obj.calculate(self.r_t, "tip")
             tip_data = self.tip.toDataFrame()
             # self.tip.print()
+            self.data = pd.concat([mean_data, tip_data], keys=2*[f"Stage {self.stage_num}"])
             self.root = obj.calculate(self.r_r, "root")
             root_data = self.root.toDataFrame()
             # root_data.
