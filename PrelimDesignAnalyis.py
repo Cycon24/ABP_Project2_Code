@@ -7,34 +7,21 @@ Created on Tue Nov 21 00:17:05 2023
 import numpy as np
 import EngineModule as EM
 from parameters.OveralAnalysis import turbofan_kwargs 
+import compressorParameters as comp
 import warnings, pandas
 from freeVortexCompressor import compressorStageData
+import matplotlib.pyplot as plt
 warnings.filterwarnings("error")
 
-# Adjustable parameters - Compressor
+# Adjustable parameters
 nc_p = 0.92 # >= 0.90 - Polytropic efficiency of overall compressor
 Mt_1 = 1.19 # <= 1.20 - tip mach number rel to blade for first stage
-Ca1  = 230  # m/s - Assuming Constant
+Ca1  = 230 # m/s - Assuming Constant
 Cw1  = 0    # m/s
 N    = 200  # rev/s
 dTos_ie = 45 # K - stag temp rise for first and last stages
 num_extra_stages = 1 # The number of stages to add after initial #stages estimation
 Lamda_after2nd = 0.5 # Degree of reaction at m line for stages 3+
-
-# Adjustable parameters - Turbine
-num_turb_stages = 2
-phi = 0.78 # >= .78 limit for Flow Coefficient
-psi = 3.3  # <= 3.3 limit for Blade Loading Coefficient
-Lamda_turb = .50 # Chosen Degree of Reaction
-
-# Gas Properties
-R =   287 # J/kg*K
-    # Air 
-cp = 1005 # J/kg*K
-gam = 1.4
-    # Gas
-cpg = 1148 # J/kg*K
-gam_g = 4/3 
 
 # Print Inputs for documentation
 print('Controllable Inputs')
@@ -66,7 +53,6 @@ Turbofan.fan.printOutputs()
 Turbofan.HP_comp.printOutputs()
 print('----------------------')
 
-
 # =============================================================================
 #   Compressor Stage Approximations
 # =============================================================================
@@ -82,6 +68,9 @@ dTo_comp = Toe - To1
 
 # Calculate the mean radius and rotational velocity at mean line 
 # based on a chosed tip mach number
+cp = 1005 # J/kg*K
+R =   287 # J/kg*K
+gam = 1.4
 
 # Static properties
 T1   = To1 - (Ca1**2) / (2*cp)
@@ -169,64 +158,98 @@ for i, stage in enumerate(stages):
     # stage.printVelocityTrianges()
     stage_datas.append(stage.data)
 
+
+
+
+
+out =pandas.concat(stage_datas)
 for_formatting = compressorStageData({}, "")
 with open("out.tex", 'w') as f:
-    out =pandas.concat(stage_datas)
+    angles = out[["alpha_1", "alpha_2", "beta_1", "beta_2"]]
+    absolute_velocities = out[["C_w1", "C_w2", "C_1", "C_2", "U"]]
+    relative_velocities = out[["V_w1", "V_w2", "V_1", "V_2"]]
+    misc = out[['M_1', 'M_2', 'Lambda', 'deHaller', 'r']]
+
     names = for_formatting.getFormattedColumns()
-    out = out.rename(columns=names)
-    f.write(out.to_latex())
+    angles = angles.rename(columns=names)
+    absolute_velocities = absolute_velocities.rename(columns=names)
+    relative_velocities = relative_velocities.rename(columns=names)
+    misc = misc.rename(columns=names)
+    
+    f.write(
+        "\\begin{center}\n" + angles.to_latex(float_format='%.3f') + "\\end{center}\n\n" +
+        "\\begin{center}\n" + absolute_velocities.to_latex(float_format='%.3f') + "\\end{center}\n\n" +
+        "\\begin{center}\n" + relative_velocities.to_latex(float_format='%.3f') + "\\end{center}\n\n" +
+        "\\begin{center}\n" + misc.to_latex(float_format='%.3f')+ "\\end{center}\n\n" 
+    )
 
-print('Finished calculations')   
+out_T = out.T
+# out.plot()
+# plt.show()
+# #print(out["beta_1"])
+plt.rcParams["text.usetex"] = True
 
+plt.figure()
+for name in ["root", "mean", "tip"]:
+    count = 1
+    mach_data = []
+    deHallar_data = []
+    Lambda_data = []
+    for item in out_T:
+        if item[1] == name:
+            mach_data.append(out_T[item[0]][name]["M_1"])
+            count+=1
+    plt.plot(list(range(1, count)), mach_data, label=name[0].upper() + name[1:])
 
-# =============================================================================
-# Turbine Calculations  
-# =============================================================================
-# Retrieve Tubine inlet and outlet values
-Toi_turb = Turbofan.HP_turb.Toi
-Toe_turb = Turbofan.HP_turb.Toe
-Poi_turb = Turbofan.HP_turb.Poi
-Poe_turb = Turbofan.HP_turb.Poe
-dTo_turb = Toi_turb - Toe_turb
+plt.plot(list(range(1, count)), (count-1)*[comp.Mach_max], "--", label="Limit")
+plt.title(f"Mach Number along the Stages")
+plt.legend()
+plt.ylabel("Mach number")
+plt.xlabel("Stage")
+plt.grid(True)
+plt.minorticks_on()
+plt.tight_layout()
+plt.savefig(f"mach.png")
 
-# Required Values
-dTo_s_turb = dTo_turb/num_turb_stages # K
-nt_p = turbofan_kwargs['npt']
+plt.figure()
+for name in ["root", "mean", "tip"]:
+    count = 1
+    deHallar_data = []
+    for item in out_T:
+        if item[1] == name:
+            deHallar_data.append(out_T[item[0]][name]["deHaller"])
+            count+=1
+            # print(out_T[item[0]][name]["M_1"])
+    plt.plot(list(range(1, count)), deHallar_data, label=name[0].upper() + name[1:])
 
-# Thus, presure Ratio for per stage
-Po4cycle = Poe_turb # 4 represents exit of stage 2, 3 is exit stage 1
-Po3_over_Po4cycle = (1 - dTo_s_turb/Toi_turb)**(gam_g/(nt_p*(gam_g - 1)))
-Po3 = Po4cycle * Po3_over_Po4cycle # Stage pressure between stage 1 and 2 of turb
+plt.plot(list(range(1, count)), (count-1)*[comp.de_Haller_min], "--", label="Limit")
+plt.title(f"de-Haller Number along the Stages")
+plt.legend()
+plt.ylabel("de-Haller Number")
+plt.xlabel("Stage")
+plt.grid(True)
+plt.minorticks_on()
+plt.tight_layout()
+plt.savefig(f"deHaller.png")
 
-# Velocities at Mean
-Um_turb = np.sqrt(2*cpg*dTo_s_turb/psi)
-Ca_turb = phi * Um_turb
+plt.figure()
+for name in ["root", "mean", "tip"]:
+    count = 1
+    Lambda_data = []
+    for item in out_T:
+        if item[1] == name:
+            Lambda_data.append(out_T[item[0]][name]["Lambda"])
+            count+=1
+    plt.plot(list(range(1, count)), Lambda_data, label=name[0].upper() + name[1:])
 
-# Gas angle and Swirl Angles Respectively
-beta2  = np.arctan(0.5/phi * (psi/2 - 2*Lamda_turb)) # rad
-beta3  = np.arctan(0.5/phi * (psi/2 + 2*Lamda_turb)) # rad
-alpha2 = np.arctan(np.tan(beta2) + 1/phi) # rad
-alpha3 = np.arctan(np.tan(beta3) - 1/phi) # rad
+plt.title(f"Degree of Reaction $\Lambda$ along the Stages")
+plt.legend()
+plt.ylabel("Degree of Reaction $\Lambda$")
+plt.xlabel("Stage")
+plt.grid(True)
+plt.minorticks_on()
+plt.tight_layout()
+plt.savefig(f"Lambda.png")
+    # print(item)
 
-# Mean Radius
-rm = Um_turb / (2*np.pi*N) # m
-
-# Obtaining Bade Height
-C3          = Ca_turb/np.cos(alpha3) # m/s
-To3         = To_turb_in + dTos_per_stage # K
-T3          = To3 - C3**2 / (2*cpg) # K
-P3_over_Po3 = (T3/To3)**(gamma_g/(gamma_g - 1))
-P3          = Po3 * P3_over_Po3 # bar
-rho3        = P3*1e5 / (R*T3) # kg/m^3
-h3          = mdot_a / (2*np.pi*rho3*Ca*rm) # m
-rt3         = rm + h3/2 # m
-rr3         = rm - h3/2 # m
-Cw2m        = cpg * dTos_per_stage / Um # m/s
-Cw2t        = Cw2m * rm/rt # m/s
-C2t         = np.sqrt(Cw2t**2 + Ca**2) # m/s
-Ut2         = Um * rt/rm # m/s
-V2t         = np.sqrt((Cw2t - Ut2)**2 + Ca**2) # m/s
-beta2t      = np.arccos(Ca / V2t) # rad
-alpha2t     = np.arctan(Cw2t / Ca) # rad
-T2t         = To1 - C2t**2 / (2*cpg) # K
-M2t         = V2t / np.sqrt(gamma_g * R * T2t)\
+print('Finished calculations')
