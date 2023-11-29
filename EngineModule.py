@@ -9,6 +9,9 @@ import numpy as np
 import EngineErrors as EngineErrors
 import EnginePerformanceFunctions as EPF
 from WorkDoneFactor import interp_wdf
+import pandas as pd
+
+from freeVortexCompressor import freeVortexCompressorMeanLine
 
 # Use to define the general states/functions shared by each/most stages
 class Stage():
@@ -466,10 +469,10 @@ class compressor_stage():
         self.C1 = np.sqrt(self.Cw1**2 + self.Ca**2)
         self.C2 = np.sqrt(self.Cw2**2 + self.Ca**2)
         # Solve for other gas-triangle properties
-        self.Vw1 = self.U_m - self.Cw1 
-        self.Vw2 = self.U_m - self.Cw2 
-        self.V1 = np.sqrt(self.U_m**2 - self.C1**2)
-        self.V2 = np.sqrt(self.U_m**2 - self.C2**2)
+        # self.Vw1 = self.U_m - self.Cw1
+        # self.Vw2 = self.U_m - self.Cw2
+        # self.V1 = np.sqrt(self.U_m**2 - self.C1**2)
+        # self.V2 = np.sqrt(self.U_m**2 - self.C2**2)
         # Solve for static params
         self.T1 = To1 - (self.C1**2)/(2*self.cp)
         self.P1 = Po1*(self.T1/To1)**(self.gam/(self.gam-1))
@@ -477,33 +480,109 @@ class compressor_stage():
         # Solve for blade dimensions
         self.h = self.mdot/(2*np.pi * self.rho1 * self.Ca * self.r_m)
         self.r_t = self.r_m + self.h/2
-        self.r_r = self.r_m - self.h/2 
+        self.r_r = self.r_m - self.h/2
 
-        # Checking tip mach
-        self.Cw1_t = self.Cw1 * self.r_m / self.r_t
-        self.C1_t = np.sqrt(self.Cw1_t**2 + self.Ca**2)
-        T1_t = To1 - (self.C1_t**2)/(2*self.cp)
-        self.V1_t = np.sqrt((2*np.pi*self.N*self.r_t - self.Cw1_t)**2 + self.Ca**2)
-        self.M1_t = self.V1_t / np.sqrt(self.gam*self.R*T1_t)
+        obj = freeVortexCompressorMeanLine(self.beta_1, self.beta_2, self.alpha_1, self.alpha_2, self.Ca, self.Lamda, self.r_m, To1, self.N, self.dTo)
+
+        try:
+            print("Stage", self.stage_num)
+            self.mean = obj.calculate(self.r_m, "mean")
+            mean_data = self.mean.toDataFrame()
+            # self.mean.print()
+            self.tip  = obj.calculate(self.r_t, "tip")
+            tip_data = self.tip.toDataFrame()
+            # self.tip.print()
+            self.root = obj.calculate(self.r_r, "root")
+            root_data = self.root.toDataFrame()
+            # root_data.
+            self.data = pd.concat([root_data, mean_data, tip_data], keys=3*[f"Stage {self.stage_num}"])
+            #print(stage_data)
+            #stage_data = pd.DataFrame(stage_data, index=[f"Stage {self.stage_num}"])
+            # self.root.print()
+        except ValueError as e:
+            print(f"While running {self.stage_num}")
+            print("  "+str(e))
+            exit()
+
+        # # Checking tip mach
+        # self.Cw1_t = self.Cw1 * self.r_m / self.r_t
+        # self.C1_t = np.sqrt(self.Cw1_t**2 + self.Ca**2)
+        # T1_t = To1 - (self.C1_t**2)/(2*self.cp)
+        # self.V1_t = np.sqrt((2*np.pi*self.N*self.r_t - self.Cw1_t)**2 + self.Ca**2)
+        # self.M1_t = self.V1_t / np.sqrt(self.gam*self.R*T1_t)
         
-        if self.M1_t > self.tip_Mach_max:
-            print('Max tip Mach exceeded in stage {}, M_t = {:.4f}'.format(self.stage_num, self.M1_t))
-            self.MachExceeded_Flag = True
+        # if self.M1_t > self.tip_Mach_max:
+        #     print('Max tip Mach exceeded in stage {}, M_t = {:.4f}'.format(self.stage_num, self.M1_t))
+        #     self.MachExceeded_Flag = True
         
-        R1_tm = self.r_t/self.r_m 
-        R1_rm = self.r_r/self.r_m
+        # R1_tm = self.r_t/self.r_m 
+        # R1_rm = self.r_r/self.r_m
         
-        # Get Degree of Reactions at root and tip
-        self.Lamda_t = 1 - (1 - self.Lamda)/R1_tm**2
-        self.Lamda_r = 1 - (1 - self.Lamda)/R1_rm**2
+        # # Get Degree of Reactions at root and tip
+        # self.Lamda_t = 1 - (1 - self.Lamda)/R1_tm**2
+        # self.Lamda_r = 1 - (1 - self.Lamda)/R1_rm**2
+
+        # if self.Lamda_r < 0:
+        #     print('root degree of reaction check failed in stage {}, Lambda_r = {:.4f}'.format(self.stage_num, self.Lamda_r))
+        # if self.Lamda_t < 0:
+        #     print('tip degree of reaction check failed in stage {}, Lambda_t = {:.4f}'.format(self.stage_num, self.Lamda_t))
         
-        # Check de Haller Criteria
-        deHaller = np.cos(self.beta_1)/np.cos(self.beta_2)
-        if deHaller < self.de_Haller_min:
-            print('de Haller check failed in stage {}, V2/V1 = {:.4f}'.format(self.stage_num, deHaller))
-            self.deHaller_Failed_Flag = True
+        # # Check de Haller Criteria
+        # deHaller = np.cos(self.beta_1)/np.cos(self.beta_2)
+        # if deHaller < self.de_Haller_min:
+        #     print('de Haller check failed in stage {}, V2/V1 = {:.4f}'.format(self.stage_num, deHaller))
+        #     self.deHaller_Failed_Flag = True
         
-        # Calcualte exit stag properties
+        # # Ca = const for free vortex so Ca_t = Ca
+        # self.alpha_1t = np.arctan(self.Cw1_t/self.Ca)
+        # self.U_t = 2*np.pi*self.r_t
+        # self.Vw1_t = -1*(self.U_t - self.Cw1_t)
+        # self.beta_1t = np.arctan(self.Vw1_t/self.Ca)
+
+        # self.Cw2_t = self.Cw2 * self.r_m / self.r_t
+        # self.C2_t = np.sqrt(self.Cw2_t**2 + self.Ca**2)
+        # T2_t = To1 - (self.C2_t**2)/(2*self.cp)
+        # self.V2_t = np.sqrt((2*np.pi*self.N*self.r_t - self.Cw2_t)**2 + self.Ca**2)
+        # self.M2_t = self.V2_t / np.sqrt(self.gam*self.R*T2_t)
+
+        # self.alpha_2t = np.arctan(self.Cw2_t/self.Ca)
+        # self.Vw2_t = -1*(self.U_t - self.Cw2_t)
+        # self.beta_2t = np.arctan(self.Vw2_t/self.Ca)
+
+        # # Check de Haller Criteria
+        # deHaller = np.cos(self.beta_1t)/np.cos(self.beta_2t)
+        # if deHaller < self.de_Haller_min:
+        #     print('de Haller check at the tip failed in stage {}, V2/V1 = {:.4f}'.format(self.stage_num, deHaller))
+        #     self.deHaller_Failed_Flag = True
+
+        # if self.M2_t > self.tip_Mach_max:
+        #     print('Max tip Mach exceeded in exit of stage {}, M_2t = {:.4f}'.format(self.stage_num, self.M2_t))
+        #     self.MachExceeded_Flag = True
+
+        # # Checking tip mach
+        # self.Cw1_r = self.Cw1 * self.r_m / self.r_r
+        # self.C1_r = np.sqrt(self.Cw1_r**2 + self.Ca**2)
+        # T1_r = To1 - (self.C1_r**2)/(2*self.cp)
+        # self.V1_r = np.sqrt((2*np.pi*self.N*self.r_r - self.Cw1_r)**2 + self.Ca**2)
+        # self.M1_r = self.V1_r / np.sqrt(self.gam*self.R*T1_r)
+
+        # # Ca = const for free vortex so Ca_t = Ca
+        # self.alpha_1r = np.arctan(self.Cw1_r/self.Ca)
+        # self.U_r = 2*np.pi*self.r_r
+        # self.Vw1_r = -1*(self.U_r - self.Cw1_r)
+        # self.beta_1r = np.arctan(self.Vw1_r/self.Ca)
+
+        # self.Cw2_r = self.Cw2 * self.r_m / self.r_r
+        # self.C2_r = np.sqrt(self.Cw2_r**2 + self.Ca**2)
+        # T2_r = To1 - (self.C2_r**2)/(2*self.cp)
+        # self.V2_r = np.sqrt((2*np.pi*self.N*self.r_r - self.Cw2_r)**2 + self.Ca**2)
+        # self.M2_r = self.V2_r / np.sqrt(self.gam*self.R*T2_r)
+
+        # self.alpha_2r = np.arctan(self.Cw2_r/self.Ca)
+        # self.Vw2_r = -1*(self.U_t - self.Cw2_r)
+        # self.beta_2r = np.arctan(self.Vw2_r/self.Ca)
+
+        # # Calcualte exit stag properties
         self.Poe = Po1*(1 + self.nc*self.dTo/To1)**(self.gam/(self.gam - 1))
         self.Toe = To1 + self.dTo
         
@@ -513,6 +592,8 @@ class compressor_stage():
     def forward(self, next_stage):
         next_stage.Toi = self.Toe
         next_stage.Poi = self.Poe
+
+    # def calcVelocityTriangleParams(self, radius)
         
     def printVelocityTrianges(self):
         num1s = 1 + (self.stage_num - 1)*3
@@ -520,24 +601,61 @@ class compressor_stage():
         num3s = num2s + 1
         print('----------------------')
         print('Stage ',self.stage_num, 'λ = {:4.3f}'.format(self.WDF))
-        print('Mean Line Properties')
-        print('Gas Angles')
-        print('\t α_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.alpha_1)))
-        print('\t Β_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.beta_1)))
-        print('\t α_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.alpha_2)))
-        print('\t Β_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.beta_2)))
-        print('\t Λ_{:.0f} {:6.3%}'.format(self.stage_num, self.Lamda))
-        print('Absolute Vels:')
-        print('\t C_{:.0f}  {:6.3f} m/s'.format(num1s, self.C1))
-        print('\t Cw_{:.0f} {:6.3f} m/s'.format(num1s, self.Cw1))
-        print('\t C_{:.0f}  {:6.3f} m/s'.format(num2s, self.C2))
-        print('\t Cw_{:.0f} {:6.3f} m/s'.format(num2s, self.Cw2))
-        print('Relative Vels:')
-        print('\t V_{:.0f}  {:6.3f} m/s'.format(num1s, self.V1))
-        print('\t Vw_{:.0f} {:6.3f} m/s'.format(num1s, self.Vw1))
-        print('\t V_{:.0f}  {:6.3f} m/s'.format(num2s, self.V2))
-        print('\t Vw_{:.0f} {:6.3f} m/s'.format(num2s, self.Vw2))
+        print('  Mean Line Properties')
+        print('  Tip Properties')
+        print('  Root Properties')
         print('----------------------')
+        # print('  Gas Angles')
+        # print('\t α_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.alpha_1)))
+        # print('\t Β_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.beta_1)))
+        # print('\t α_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.alpha_2)))
+        # print('\t Β_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.beta_2)))
+        # print('\t Λ_{:.0f} {:6.3%}'.format(self.stage_num, self.Lamda))
+        # print('  Absolute Vels:')
+        # print('\t C_{:.0f}  {:6.3f} m/s'.format(num1s, self.C1))
+        # print('\t Cw_{:.0f} {:6.3f} m/s'.format(num1s, self.Cw1))
+        # print('\t C_{:.0f}  {:6.3f} m/s'.format(num2s, self.C2))
+        # print('\t Cw_{:.0f} {:6.3f} m/s'.format(num2s, self.Cw2))
+        # print('  Relative Vels:')
+        # print('\t V_{:.0f}  {:6.3f} m/s'.format(num1s, self.V1))
+        # print('\t Vw_{:.0f} {:6.3f} m/s'.format(num1s, self.Vw1))
+        # print('\t V_{:.0f}  {:6.3f} m/s'.format(num2s, self.V2))
+        # print('\t Vw_{:.0f} {:6.3f} m/s'.format(num2s, self.Vw2))
+        # print(' Tip Properties')
+        # print('  Gas Angles')
+        # print('\t α_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.alpha_1t)))
+        # print('\t Β_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.beta_1t)))
+        # print('\t α_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.alpha_2t)))
+        # print('\t Β_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.beta_2t)))
+        # print('\t Λ_{:.0f} {:6.3%}'.format(self.stage_num, self.Lamda_t))
+        # print('  Absolute Vels:')
+        # print('\t C_{:.0f}  {:6.3f} m/s'.format(num1s, self.C1_t))
+        # print('\t Cw_{:.0f} {:6.3f} m/s'.format(num1s, self.Cw1_t))
+        # print('\t C_{:.0f}  {:6.3f} m/s'.format(num2s, self.C2_t))
+        # print('\t Cw_{:.0f} {:6.3f} m/s'.format(num2s, self.Cw2_t))
+        # print('  Relative Vels:')
+        # print('\t V_{:.0f}  {:6.3f} m/s'.format(num1s, self.V1_t))
+        # print('\t Vw_{:.0f} {:6.3f} m/s'.format(num1s, self.Vw1_t))
+        # print('\t V_{:.0f}  {:6.3f} m/s'.format(num2s, self.V2_t))
+        # print('\t Vw_{:.0f} {:6.3f} m/s'.format(num2s, self.Vw2_t))
+        # print(' Root Properties')
+        # print('  Gas Angles')
+        # print('\t α_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.alpha_1r)))
+        # print('\t Β_{:.0f} {:6.3f}°'.format(num1s, np.degrees(self.beta_1r)))
+        # print('\t α_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.alpha_2r)))
+        # print('\t Β_{:.0f} {:6.3f}°'.format(num2s, np.degrees(self.beta_2r)))
+        # print('\t Λ_{:.0f} {:6.3%}'.format(self.stage_num, self.Lamda_r))
+        # print('  Absolute Vels:')
+        # print('\t C_{:.0f}  {:6.3f} m/s'.format(num1s, self.C1_r))
+        # print('\t Cw_{:.0f} {:6.3f} m/s'.format(num1s, self.Cw1_r))
+        # print('\t C_{:.0f}  {:6.3f} m/s'.format(num2s, self.C2_r))
+        # print('\t Cw_{:.0f} {:6.3f} m/s'.format(num2s, self.Cw2_r))
+        # print('  Relative Vels:')
+        # print('\t V_{:.0f}  {:6.3f} m/s'.format(num1s, self.V1_r))
+        # print('\t Vw_{:.0f} {:6.3f} m/s'.format(num1s, self.Vw1_r))
+        # print('\t V_{:.0f}  {:6.3f} m/s'.format(num2s, self.V2_r))
+        # print('\t Vw_{:.0f} {:6.3f} m/s'.format(num2s, self.Vw2_r))
+
         
 class rotor_turbine():
     def __init__(self):

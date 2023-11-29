@@ -8,7 +8,7 @@ import numpy as np
 from WorkDoneFactor import interp_wdf
 
 # Inputs / Knobs to turn
-nc_p = 0.90 # >= 0.90
+nc_p = 0.92 # >= 0.90
 Mt   = 1.15 # <= 1.20
 Ca1  = 150  # m/s - Assuming Constant
 Cw1  = 0    # m/s

@@ -7,14 +7,17 @@ Created on Tue Nov 21 00:17:05 2023
 import numpy as np
 import EngineModule as EM
 from parameters.OveralAnalysis import turbofan_kwargs 
+import warnings, pandas
+from freeVortexCompressor import compressorStageData
+warnings.filterwarnings("error")
 
 # Adjustable parameters
-nc_p = 0.90 # >= 0.90 - Polytropic efficiency of overall compressor
-Mt_1 = 1.15 # <= 1.20 - tip mach number rel to blade for first stage
-Ca1  = 150  # m/s - Assuming Constant
+nc_p = 0.92 # >= 0.90 - Polytropic efficiency of overall compressor
+Mt_1 = 1.19 # <= 1.20 - tip mach number rel to blade for first stage
+Ca1  = 230  # m/s - Assuming Constant
 Cw1  = 0    # m/s
 N    = 200  # rev/s
-dTos_ie = 30 # K - stag temp rise for first and last stages
+dTos_ie = 45 # K - stag temp rise for first and last stages
 num_extra_stages = 1 # The number of stages to add after initial #stages estimation
 Lamda_after2nd = 0.5 # Degree of reaction at m line for stages 3+
 
@@ -68,8 +71,8 @@ R =   287 # J/kg*K
 gam = 1.4
 
 # Static properties
-T1 = To1 - (Ca1**2) / (2*cp)
-P1 = Po1*(T1/To1)**(gam/(gam-1))
+T1   = To1 - (Ca1**2) / (2*cp)
+P1   = Po1*(T1/To1)**(gam/(gam-1))
 rho1 = P1/(R*T1)
 
 # Find first radii
@@ -81,13 +84,14 @@ r_m = (r1_t + r1_r)/2  # Constant through the stages
 
 # Stage number estimation
 U_m = 2*np.pi*r_m*N
-beta_1m = np.arctan(U_m/Ca1) # Radians
+beta_1m = np.arctan2(U_m, Ca1) # Radians
 V_1m = Ca1/np.cos(beta_1m)
 V_2m = 0.65*V_1m # Using de Haller crit
 beta_2m = np.arccos(Ca1/(V_2m)) # Radians
 
 # IGNORING WorkDoneFactor for initial estimations
 dTo_s_estimate = U_m*Ca1*(np.tan(beta_1m)-np.tan(beta_2m)) / cp # K
+
 stage_approx = dTo_comp / dTo_s_estimate
 num_stages_approx = int(np.ceil(stage_approx))
 print('Initial Aproximation for number of Stages:')
@@ -110,7 +114,8 @@ allStage_inputs = {
     'nc_s': nc_p,
     'U_m': U_m,
     'mdot_c': mdot_c,
-    'N': N}
+    'N': N
+}
 
 # Add all stages into an array to iterate through
 stages = []
@@ -121,14 +126,18 @@ for i in range(0,num_stages_approx):
     elif i == 1:
         # need 0 input as reminder to manually average DoR from stage 1
         stage = EM.compressor_stage(i+1, 0, dTos_int, **allStage_inputs)
+    
     elif i == num_stages_approx - 1: # Last stage
         stage = EM.compressor_stage(i+1, Lamda_after2nd, dTos_ie, **allStage_inputs)
+    
     else: # All intermediate stages
         # Assumes DoR = 0.5
         stage = EM.compressor_stage(i+1, Lamda_after2nd, dTos_int, **allStage_inputs)
     
     stages.append(stage)
 
+
+stage_datas = []
 
 # Propogate calculations through stages
 for i, stage in enumerate(stages):
@@ -144,7 +153,15 @@ for i, stage in enumerate(stages):
         break
     if i != num_stages_approx -1:
         stage.forward(stages[i+1])
-    stage.printVelocityTrianges()
-   
+    # stage.printVelocityTrianges()
+    stage_datas.append(stage.data)
+
+for_formatting = compressorStageData({}, "")
+with open("out.tex", 'w') as f:
+    out =pandas.concat(stage_datas)
+    names = for_formatting.getFormattedColumns()
+    out = out.rename(columns=names)
+    f.write(out.to_latex())
+
 print('Finished calculations')     
 
