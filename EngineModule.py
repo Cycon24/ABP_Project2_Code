@@ -657,12 +657,115 @@ class compressor_stage():
         # print('\t Vw_{:.0f} {:6.3f} m/s'.format(num2s, self.Vw2_r))
 
         
-class rotor_turbine():
-    def __init__(self):
-        print('In development')
+class turbine_free_vortex():
+    def __init__(self, CycleTurbineObject, numStages, psi_m1, phi_m1, Lamda, npt, N, PHI_MIN=0.78, PSI_MAX=3.3):
+        # Retrieve Tubine inlet and outlet values
+        self.Toi = CycleTurbineObject.Toi
+        self.Toe = CycleTurbineObject.Toe
+        self.Poi = CycleTurbineObject.Poi
+        self.Poe = CycleTurbineObject.Poe
+        self.dTo_cycle = self.Toi - self.Toe
+        self.mdot = CycleTurbineObject.m_dot
+        self.PHI_MIN = PHI_MIN
+        self.PSI_MAX = PSI_MAX
+        
+        self.psi_m = psi_m1
+        self.phi_m = phi_m1
+        self.Lamda = Lamda
+        self.nt_p = npt
+        self.N = N
+        
+        self.gam = CycleTurbineObject.gam_g
+        self.cp = CycleTurbineObject.cp * 1000 # convert to J/kg*K
+        self.R = CycleTurbineObject.R 
+        
+        # Assumes even work distribustion between stages
+        self.dTo_stage = self.dTo_turb/numStages # K
+        
+        self.stages = []
+        for i in range(0, numStages):
+            if i == 0:
+                self.stages.append(turbine_stage(self.Poi, self.Toi, self, i+1))
+            else:
+                self.stages.append(turbine_stage(self.stages[i-1].Po3, self.stages[i-1].To3, self, i+1))
+                
+                
+class turbine_stage():
+    def __init__(self, Poi, Toi, TurbineUnit_FV, stageNum):
+        self.stageNum = stageNum
+        self.gam = TurbineUnit_FV.gam_g
+        self.cp = TurbineUnit_FV.cp # J/kg*K
+        self.R = TurbineUnit_FV.R 
+        nt_p = TurbineUnit_FV.nt_p
+        self.Lamda = TurbineUnit_FV.Lamda
+        self.N = TurbineUnit_FV.N
+        self.mdot = TurbineUnit_FV.mdot
+        self.PHI_MIN= TurbineUnit_FV.PHI_MIN
+        self.PSI_MAX= TurbineUnit_FV.PSI_MAX
+        
+        self.dTo_s = TurbineUnit_FV.dTo_stage # Still assuming even work distribution between stages
+        self.phi_m = TurbineUnit_FV.phi_m 
+        self.psi_m = TurbineUnit_FV.psi_m
+        self.Po1 = Poi
+        self.To1 = Toi
+        self.Po3 = Poi*(1 - self.dTo_s/Toi)**(self.gam/(nt_p*(self.gam - 1))) 
+        self.To3 = Toi - self.dTo_s
+        
+    def calculate(self):
+        name = f"Stage {self.stageNum}"
+        # Velocities at Mean
+        U_m = np.sqrt(2*self.cp*self.dTo_s/self.psi_m)
+        Ca = self.phi_m * U_m
+        
+        # MEAN LINE
+        # Gas angles
+        phi = self.phi_m
+        psi = self.psi_m
+        beta_2m  = np.arctan(0.5/phi * (psi/2 - 2*self.Lamda)) # rad
+        beta_3m  = np.arctan(0.5/phi * (psi/2 + 2*self.Lamda)) # rad
+        alpha_2m = np.arctan(np.tan(beta_2m) + 1/phi) # rad
+        alpha_3m = np.arctan(np.tan(beta_3m) - 1/phi) # rad
+        
+        # Mean Radius
+        r_m = U_m / (2*np.pi*self.N) # m
+        
+        # Obtaining Bade Height and radii
+        C_3m          = Ca/np.cos(alpha_3m) # m/s
+        T_3m          = self.To3 - C_3m**2 / (2*self.cp) # K
+        P_3m          = self.Po3 * (T_3m/self.To3)**(self.gam/(self.gam - 1))
+        rho_3m        = P_3m*1e5 / (self.R*T_3m) # kg/m^3 - Assumed pressure in Bar
+        h           = self.mdot / (2*np.pi*rho_3m*Ca*r_m) # m
+        r_t         = r_m + h/2 # m
+        r_r         = r_m - h/2 # m
+        # note: r2's = r3's
+        
+        U_r = 2*np.pi*self.N*r_r
+        U_t = 2*np.pi*self.N*r_t
+        psi_r = 2*self.cp*self.dTo_s / U_r**2 
+        psi_t = 2*self.cp*self.dTo_s / U_t**2 
+        phi_r = Ca/U_r 
+        phi_t = Ca/U_t
+        
+        # Tip calculations
+        C_w2m        = self.cp * self.dTo_s / U_m # m/s
+        C_w2t        = C_w2m * r_m/r_t # m/s
+        C_2t         = np.sqrt(C_w2t**2 + Ca**2) # m/s
+        U_t2         = U_m * r_t/r_m # m/s
+        V_2t         = np.sqrt((C_w2t - U_t2)**2 + Ca**2) # m/s
+        beta_2t      = np.arccos(Ca / V_2t) # rad
+        alpha_2t     = np.arctan(C_w2t / Ca) # rad
+        T_2t         = self.To1 - C_2t**2 / (2*self.cp) # K
+        M_2t         = V_2t / np.sqrt(self.gam * self.R * T_2t)
+        
+        if M_2t > self.Mach_max:
+            raise ValueError('Max Mach exceeded at {} : M_1 = {:.4f}'.format(name, M_2t))
+        if psi_r < self.PSI_MIN:
+            raise ValueError('Min Psi exceeded at {} : psi_r = {:.4f}'.format(name, psi_r))
+        return M_2t # For testing
         
         
-def combustor_component():
+        
+class combustor_component():
     def __init__(self):
         # Possible inputs/Outputs:
         # mdot
