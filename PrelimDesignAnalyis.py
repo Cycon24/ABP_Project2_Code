@@ -7,8 +7,10 @@ Created on Tue Nov 21 00:17:05 2023
 import numpy as np
 import EngineModule as EM
 from parameters.OveralAnalysis import turbofan_kwargs 
+import compressorParameters as comp
 import warnings, pandas
 from freeVortexCompressor import compressorStageData
+import matplotlib.pyplot as plt
 warnings.filterwarnings("error")
 
 # Adjustable parameters
@@ -156,12 +158,99 @@ for i, stage in enumerate(stages):
     # stage.printVelocityTrianges()
     stage_datas.append(stage.data)
 
+
+
+
+
+out =pandas.concat(stage_datas)
 for_formatting = compressorStageData({}, "")
 with open("out.tex", 'w') as f:
-    out =pandas.concat(stage_datas)
-    names = for_formatting.getFormattedColumns()
-    out = out.rename(columns=names)
-    f.write(out.to_latex(float_format='%.3f'))
+    angles = out[["alpha_1", "alpha_2", "beta_1", "beta_2"]]
+    absolute_velocities = out[["C_w1", "C_w2", "C_1", "C_2", "U"]]
+    relative_velocities = out[["V_w1", "V_w2", "V_1", "V_2"]]
+    misc = out[['M_1', 'M_2', 'Lambda', 'deHaller', 'r']]
 
-print('Finished calculations')     
+    names = for_formatting.getFormattedColumns()
+    angles = angles.rename(columns=names)
+    absolute_velocities = absolute_velocities.rename(columns=names)
+    relative_velocities = relative_velocities.rename(columns=names)
+    misc = misc.rename(columns=names)
+    
+    f.write(
+        "\\begin{center}\n" + angles.to_latex(float_format='%.3f') + "\\end{center}\n\n" +
+        "\\begin{center}\n" + absolute_velocities.to_latex(float_format='%.3f') + "\\end{center}\n\n" +
+        "\\begin{center}\n" + relative_velocities.to_latex(float_format='%.3f') + "\\end{center}\n\n" +
+        "\\begin{center}\n" + misc.to_latex(float_format='%.3f')+ "\\end{center}\n\n" 
+    )
+
+out_T = out.T
+# out.plot()
+# plt.show()
+# #print(out["beta_1"])
+plt.rcParams["text.usetex"] = True
+
+plt.figure()
+for name in ["root", "mean", "tip"]:
+    count = 1
+    mach_data = []
+    deHallar_data = []
+    Lambda_data = []
+    for item in out_T:
+        if item[1] == name:
+            mach_data.append(out_T[item[0]][name]["M_1"])
+            count+=1
+    plt.plot(list(range(1, count)), mach_data, label=name[0].upper() + name[1:])
+
+plt.plot(list(range(1, count)), (count-1)*[comp.Mach_max], "--", label="Limit")
+plt.title(f"Mach Number along the Stages")
+plt.legend()
+plt.ylabel("Mach number")
+plt.xlabel("Stage")
+plt.grid(True)
+plt.minorticks_on()
+plt.tight_layout()
+plt.savefig(f"mach.png")
+
+plt.figure()
+for name in ["root", "mean", "tip"]:
+    count = 1
+    deHallar_data = []
+    for item in out_T:
+        if item[1] == name:
+            deHallar_data.append(out_T[item[0]][name]["deHaller"])
+            count+=1
+            # print(out_T[item[0]][name]["M_1"])
+    plt.plot(list(range(1, count)), deHallar_data, label=name[0].upper() + name[1:])
+
+plt.plot(list(range(1, count)), (count-1)*[comp.de_Haller_min], "--", label="Limit")
+plt.title(f"de-Haller Number along the Stages")
+plt.legend()
+plt.ylabel("de-Haller Number")
+plt.xlabel("Stage")
+plt.grid(True)
+plt.minorticks_on()
+plt.tight_layout()
+plt.savefig(f"deHaller.png")
+
+plt.figure()
+for name in ["root", "mean", "tip"]:
+    count = 1
+    Lambda_data = []
+    for item in out_T:
+        if item[1] == name:
+            Lambda_data.append(out_T[item[0]][name]["Lambda"])
+            count+=1
+    plt.plot(list(range(1, count)), Lambda_data, label=name[0].upper() + name[1:])
+
+plt.title(f"Degree of Reaction $\Lambda$ along the Stages")
+plt.legend()
+plt.ylabel("Degree of Reaction $\Lambda$")
+plt.xlabel("Stage")
+plt.grid(True)
+plt.minorticks_on()
+plt.tight_layout()
+plt.savefig(f"Lambda.png")
+    # print(item)
+
+print('Finished calculations')
 
