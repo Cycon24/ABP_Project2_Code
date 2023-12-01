@@ -22,11 +22,10 @@ class AirfoilTransformer():
             airfoil = np.zeros((R,3))
             airfoil[:,0:2] = self.airfoil 
             self.airfoil = airfoil
-        print(self.airfoil) 
         self.airfoil_trans = self.airfoil.copy()
        
         
-    def Transform(self, scale=1, translations=[0,0,0], rotations=[0,0,0]):
+    def Transform(self, scale=1, translations=[0,0,0], rotations=[0,0,0], rotateFirst=True):
         '''
         Transforms the airfoil from initialization by scaling by scale, translating by [dx, dy, dz]
         and rotating about [ax, ay, az] (in degrees). Saves transformed airfoil into self.airfoil_trans
@@ -55,14 +54,21 @@ class AirfoilTransformer():
             v = self.airfoil[r,:]
             # Scale to needed size
             v = CT.Scale(v.copy(), scale,scale,scale)
-            # Rotate
-            v = CT.Rotate(v.copy(), ax, ay, az)
-            # Translate
-            v = CT.Translate(v.copy(), dx,dy,dz)
+            if rotateFirst:
+                # Rotate
+                v = CT.Rotate(v.copy(), ax, ay, az)
+                # Translate
+                v = CT.Translate(v.copy(), dx,dy,dz)
+            else:
+                # Translate
+                v = CT.Translate(v.copy(), dx,dy,dz)
+                # Rotate
+                v = CT.Rotate(v.copy(), ax, ay, az)
+                
             
             self.airfoil_trans[r,:] = v.copy()
 
-    def PlotAirfoils(self, margin=0.0):
+    def PlotAirfoils(self, fig=None, ax=None, plotOriginal=False, margin=0.0):
         '''
         Plots the original and transformed airfoils on a 3D Plot to compair/verify correct rotaions
 
@@ -76,17 +82,24 @@ class AirfoilTransformer():
         None.
 
         '''
-        fig = plt.figure("Airfoil Transformer")
-        ax = fig.add_subplot(121, projection='3d')
+        if fig == None:
+            fig = plt.figure("Airfoil Transformer")
+        if ax == None:
+            ax = fig.add_subplot(121, projection='3d')
         
         plt.title(self.airfoil_name)
-        ax.plot(self.airfoil[:,0],self.airfoil[:,1],self.airfoil[:,2], label='Original')
+        if plotOriginal:
+            ax.plot(self.airfoil[:,0],self.airfoil[:,1],self.airfoil[:,2], label='Original')
         ax.plot(self.airfoil_trans[:,0],self.airfoil_trans[:,1],self.airfoil_trans[:,2], label='Transformed')
         plt.legend()
         
-        max1 = max(np.max(self.airfoil), np.max(self.airfoil_trans))
-        min1 = min(np.min(self.airfoil), np.min(self.airfoil_trans))
-        
+        if plotOriginal:
+            max1 = max(np.max(self.airfoil), np.max(self.airfoil_trans))
+            min1 = min(np.min(self.airfoil), np.min(self.airfoil_trans))
+        else: 
+            max1 = np.max(self.airfoil_trans)
+            min1 = np.min(self.airfoil_trans)
+            
         margin += 1
         ax.set_xlim((margin*min1, margin*max1))            
         ax.set_ylim((margin*min1, margin*max1))
@@ -118,10 +131,11 @@ class AirfoilTransformer():
     def camberline_angles(self, CamberLineFile):
         self.camberline = np.genfromtxt(CamberLineFile)
         slope = (self.camberline[4,1] -  self.camberline[0,1])/(self.camberline[4,0] -  self.camberline[0,0])
-        LE_CL_angle = np.arctan(slope)
+        LE_camber_angle = np.arctan(slope)
         slope = (self.camberline[-5,1] -  self.camberline[-1,1])/(self.camberline[-5,0] -  self.camberline[-1,0])
-        TE_CL_angle = np.arctan(slope)
-        print(np.degrees(LE_CL_angle), np.degrees(TE_CL_angle))
+        TE_camber_angle = np.arctan(slope)
+        
+        return np.degrees(LE_camber_angle), np.degrees(TE_camber_angle)
         
         
     def rotate_to_incidence(self, theta1, theta2):
