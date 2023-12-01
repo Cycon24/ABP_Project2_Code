@@ -720,6 +720,7 @@ class turbine_stage():
         U_m = np.sqrt(2*self.cp*self.dTo_s/self.psi_m)
         Ca = self.phi_m * U_m
         
+        
         # MEAN LINE
         # Gas angles
         phi = self.phi_m
@@ -736,7 +737,7 @@ class turbine_stage():
         C_3m          = Ca/np.cos(alpha_3m) # m/s
         T_3m          = self.To3 - C_3m**2 / (2*self.cp) # K
         P_3m          = self.Po3 * (T_3m/self.To3)**(self.gam/(self.gam - 1))
-        rho_3m        = P_3m*1e5 / (self.R*T_3m) # kg/m^3 - Assumed pressure in Bar
+        rho_3m        = P_3m / (self.R*T_3m) # kg/m^3 - Assumed pressure in Pa
         h           = self.mdot / (2*np.pi*rho_3m*Ca*r_m) # m
         r_t         = r_m + h/2 # m
         r_r         = r_m - h/2 # m
@@ -744,6 +745,7 @@ class turbine_stage():
         
         U_r = 2*np.pi*self.N*r_r
         U_t = 2*np.pi*self.N*r_t
+        
         psi_r = 2*self.cp*self.dTo_s / U_r**2 
         psi_t = 2*self.cp*self.dTo_s / U_t**2 
         phi_r = Ca/U_r 
@@ -753,15 +755,16 @@ class turbine_stage():
         C_w2m        = self.cp * self.dTo_s / U_m # m/s
         C_w2t        = C_w2m * r_m/r_t # m/s
         C_2t         = np.sqrt(C_w2t**2 + Ca**2) # m/s
-        U_t2         = U_m * r_t/r_m # m/s
-        V_2t         = np.sqrt((C_w2t - U_t2)**2 + Ca**2) # m/s
+        
+        V_2t         = np.sqrt((C_w2t - U_t)**2 + Ca**2) # m/s
         beta_2t      = np.arccos(Ca / V_2t) # rad
         alpha_2t     = np.arctan(C_w2t / Ca) # rad
         T_2t         = self.To1 - C_2t**2 / (2*self.cp) # K
         M_2t         = V_2t / np.sqrt(self.gam * self.R * T_2t)
-        
         # ADD THIS SOMEWHERE ELSE LATER
         self.Mach_max = 1.2
+        
+        
         # if M_2t > self.Mach_max:
         #     raise ValueError('Max Mach exceeded at {} : M_1 = {:.4f}'.format(name, M_2t))
         # if psi_r > self.PSI_MAX:
@@ -772,7 +775,7 @@ class turbine_stage():
         #     raise ValueError('Min Psi exceeded at {} : psi_t = {:.4f}'.format(name, psi_t))
         # if phi_t < self.PHI_MIN:
         #     raise ValueError('Max Phi exceeded at {} : phi_t = {:.4f}'.format(name, phi_t))
-        return M_2t # For testing
+        
         
         
         
