@@ -8,15 +8,15 @@ from AirfoilTransformer import AirfoilTransformer
 import numpy as np
 import matplotlib.pyplot as plt
 # Compressor Outputs
-r_r = 0.210 # m
+r_r = 0.208 # m
 theta_1r = 43.819 # deg
 theta_2r = -5.897 # deg
 
-r_m = 0.29 # m
+r_m = 0.217 # m
 theta_1m = 45.292 # deg
 theta_2m = 0 # deg
 
-r_t = 0.370 # m
+r_t = 0.225 # m
 theta_1t = 46.679 # deg
 theta_2t = 6.397  # deg
 
