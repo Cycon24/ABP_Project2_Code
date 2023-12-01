@@ -441,6 +441,7 @@ class compressor_stage():
             self.Cw1 = 0 if self.Cw1 == None else self.Cw1
             # Solve for whirl difference and whirl vel
             dCw = self.cp*self.dTo / (wdf*self.U_m) # Cw2 - Cw1 = dCw
+
             self.Cw2 = dCw + self.Cw1
             # Solve for Gas angles
             self.beta_1 = np.arctan((self.U_m - self.Cw1) / self.Ca)
@@ -481,6 +482,7 @@ class compressor_stage():
         self.h = self.mdot/(2*np.pi * self.rho1 * self.Ca * self.r_m)
         self.r_t = self.r_m + self.h/2
         self.r_r = self.r_m - self.h/2
+
 
         obj = freeVortexCompressorMeanLine(self.beta_1, self.beta_2, self.alpha_1, self.alpha_2, self.Ca, self.Lamda, self.r_m, To1, self.N, self.dTo, self.WDF)
 
