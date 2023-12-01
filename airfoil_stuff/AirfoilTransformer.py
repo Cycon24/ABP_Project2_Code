@@ -68,7 +68,7 @@ class AirfoilTransformer():
             
             self.airfoil_trans[r,:] = v.copy()
 
-    def PlotAirfoils(self, fig=None, ax=None, plotOriginal=False, margin=0.0):
+    def PlotAirfoils(self, fig=None, ax=None, plotOriginal=False, margin=0.0, LabelTag=""):
         '''
         Plots the original and transformed airfoils on a 3D Plot to compair/verify correct rotaions
 
@@ -89,8 +89,8 @@ class AirfoilTransformer():
         
         plt.title(self.airfoil_name)
         if plotOriginal:
-            ax.plot(self.airfoil[:,0],self.airfoil[:,1],self.airfoil[:,2], label='Original')
-        ax.plot(self.airfoil_trans[:,0],self.airfoil_trans[:,1],self.airfoil_trans[:,2], label='Transformed')
+            ax.plot(self.airfoil[:,0],self.airfoil[:,1],self.airfoil[:,2], label='Original '+LabelTag)
+        ax.plot(self.airfoil_trans[:,0],self.airfoil_trans[:,1],self.airfoil_trans[:,2], label='Transformed '+LabelTag)
         plt.legend()
         
         if plotOriginal:
@@ -104,6 +104,8 @@ class AirfoilTransformer():
         ax.set_xlim((margin*min1, margin*max1))            
         ax.set_ylim((margin*min1, margin*max1))
         ax.set_zlim((margin*min1, margin*max1))
+        
+        ax.set_xlabel("X (m)")
         
     def SaveAsTXT(self, NewFN_tag="_Transformed"):
        with open(self.file_loc+NewFN_tag+'.txt', "w") as my_output_file:
@@ -128,11 +130,13 @@ class AirfoilTransformer():
                 LE_i = r
                 break
     
-    def camberline_angles(self, CamberLineFile):
+    def camberline_angles(self, CamberLineFile, pointDistance=5):
+        i = pointDistance - 1
+        j = -pointDistance
         self.camberline = np.genfromtxt(CamberLineFile)
-        slope = (self.camberline[4,1] -  self.camberline[0,1])/(self.camberline[4,0] -  self.camberline[0,0])
+        slope = (self.camberline[i,1] -  self.camberline[0,1])/(self.camberline[i,0] -  self.camberline[0,0])
         LE_camber_angle = np.arctan(slope)
-        slope = (self.camberline[-5,1] -  self.camberline[-1,1])/(self.camberline[-5,0] -  self.camberline[-1,0])
+        slope = (self.camberline[j,1] -  self.camberline[-1,1])/(self.camberline[j,0] -  self.camberline[-1,0])
         TE_camber_angle = np.arctan(slope)
         
         return np.degrees(LE_camber_angle), np.degrees(TE_camber_angle)

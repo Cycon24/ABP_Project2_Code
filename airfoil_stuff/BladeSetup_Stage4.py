@@ -11,29 +11,29 @@ from thetaCalc import CalculateThetas
 
 
 
-# Compressor Outputs - Stage 8
-r_r = 0.258 # m
-beta_1r = 44.767
-beta_2r = 18.669
+# Compressor Outputs
+r_r = 0.248 # m
+beta_1r = 45.209
+beta_2r = 9.064
 
 r_m = 0.265 # m
-beta_1m = 46.079
-beta_2m = 21.842
+beta_1m = 48.172
+beta_2m = 17.842
 
-r_t = 0.271 # m
-beta_1t = 47.319
-beta_2t = 24.818
+r_t = 0.281 # m
+beta_1t = 50.772
+beta_2t = 25.439
 
 # Params
-AR = 0.3
+AR = 3
 s_c = 0.9 # s/c - pitch to chord ratio
 h = r_t - r_r 
 c = h/AR   # m - chord length
 s = s_c*c  # m - blade pitch (s/c = 0.9)
 
 theta_1r, theta_2r = CalculateThetas(beta_1r, beta_2r, h, s_c)
-theta_1m, theta_2m = CalculateThetas(beta_1m, beta_2m, h, 0.8)
-theta_1t, theta_2t = CalculateThetas(beta_1t, beta_2t, h, 0.6)
+theta_1m, theta_2m = CalculateThetas(beta_1m, beta_2m, h, 0.9)
+theta_1t, theta_2t = CalculateThetas(beta_1t, beta_2t, h, 0.9)
 
 
 # Desired Turn Angle - Phi (deg)
@@ -50,9 +50,9 @@ n = 2*np.pi*r_m/s
 print(f'Number of blades: {n} = {np.ceil(n)}')
 
 airfoil_file_location = "C:\\Users\\cycon\\Documents\\ABP_P2\\airfoil_stuff\\airfoils\\"
-airfoil_name_r = "NACA-6509"
-airfoil_name_m = "NACA-4509"
-airfoil_name_t = "NACA-2509"
+airfoil_name_r = "NACA-9509"
+airfoil_name_m = "NACA-8509"
+airfoil_name_t = "NACA-3509"
 camberline_file_tag = "_Camberline.txt"
 camber_r_file = airfoil_file_location + airfoil_name_r + camberline_file_tag
 camber_m_file = airfoil_file_location + airfoil_name_m + camberline_file_tag
@@ -98,9 +98,9 @@ print(" tip:  {:.3f}".format(psi_t))
 
 scaleFac = 1
 x_transFac = 0 #scaleFac
-r_r = r_r / c
-r_m = r_m / c
-r_t = r_t / c
+r_r = r_r #/ c
+r_m = r_m #/ c
+r_t = r_t #/ c
 
 root.Transform(scale=scaleFac, translations=[x_transFac,0,r_r], rotations=[0,0,psi_r], rotateFirst=False)
 mean.Transform(scale=scaleFac, translations=[x_transFac,0,r_m], rotations=[0,0,psi_m], rotateFirst=False)
@@ -113,6 +113,6 @@ root.PlotAirfoils(fig=fig, ax=ax, LabelTag="Root")
 mean.PlotAirfoils(fig=fig, ax=ax, LabelTag="Mean")
 tip.PlotAirfoils(fig=fig, ax=ax, LabelTag="Tip")
 
-root.SaveAsTXT("root_stage8")
-tip.SaveAsTXT("tip_stage8")
-mean.SaveAsTXT("mean_stage8")
+# root.SaveAsTXT("root_stage4")
+# tip.SaveAsTXT("tip_stage4")
+# mean.SaveAsTXT("mean_stage4")

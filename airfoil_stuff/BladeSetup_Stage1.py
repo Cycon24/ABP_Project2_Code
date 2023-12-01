@@ -11,21 +11,21 @@ from thetaCalc import CalculateThetas
 
 
 
-# Compressor Outputs - Stage 8
-r_r = 0.258 # m
-beta_1r = 44.767
-beta_2r = 18.669
+# Compressor Outputs
+r_r = 0.222 # m
+beta_1r = 42.246
+beta_2r = 10.628
 
 r_m = 0.265 # m
-beta_1m = 46.079
-beta_2m = 21.842
+beta_1m = 49.912
+beta_2m = 30.262
 
-r_t = 0.271 # m
-beta_1t = 47.319
-beta_2t = 24.818
+r_t = 0.307 # m
+beta_1t = 55.491
+beta_2t = 43.039
 
 # Params
-AR = 0.3
+AR = 3
 s_c = 0.9 # s/c - pitch to chord ratio
 h = r_t - r_r 
 c = h/AR   # m - chord length
@@ -50,8 +50,8 @@ n = 2*np.pi*r_m/s
 print(f'Number of blades: {n} = {np.ceil(n)}')
 
 airfoil_file_location = "C:\\Users\\cycon\\Documents\\ABP_P2\\airfoil_stuff\\airfoils\\"
-airfoil_name_r = "NACA-6509"
-airfoil_name_m = "NACA-4509"
+airfoil_name_r = "NACA-8509"
+airfoil_name_m = "NACA-0009"
 airfoil_name_t = "NACA-2509"
 camberline_file_tag = "_Camberline.txt"
 camber_r_file = airfoil_file_location + airfoil_name_r + camberline_file_tag
